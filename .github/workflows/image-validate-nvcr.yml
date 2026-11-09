@@ -95,7 +95,7 @@ jobs:
           fi
 
           # The controller image's version, so the two pair by tag.
-          version="$(git describe --tags --always --match 'v*' "${GITHUB_SHA}")"
+          version="$(release/hack/describe-version.sh "${GITHUB_SHA}")"
 
           # sha-<commit> records what main built. A tag run rebuilds the same
           # commit under a different version label, so a different digest, and
