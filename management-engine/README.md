@@ -33,15 +33,6 @@ make chart-check # generate, lint, and render the management-engine chart
 For a drift check, start with a clean working tree before regeneration.
 `make test` includes `test-controller`; the separate command runs that suite alone.
 
-API tests run directly with `go test` or an IDE. Envtest downloads missing
-binaries automatically and caches them under `bin/k8s`. The first run needs
-network access and may require a longer IDE test timeout than 30 seconds.
-
-The API test pins its Kubernetes version in `apis/v1/schema_envtest_test.go`;
-edit that constant to bump the version for both local and CI runs.
-The controller and resource integration suites still use `make setup-envtest`
-to download their binaries.
-
 ### Tilt provider
 
 Add `management-engine` to the provider list in `controller/tilt_config.json`,
