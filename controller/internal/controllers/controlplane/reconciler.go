@@ -16,6 +16,7 @@ import (
 	"github.com/dsx-ai-factory/nvke/controller/internal/clients"
 	"github.com/dsx-ai-factory/nvke/controller/internal/config"
 	"github.com/dsx-ai-factory/nvke/controller/internal/db"
+	"github.com/dsx-ai-factory/nvke/controller/internal/failuredomains"
 )
 
 // reconciler reconciles control planes.
@@ -107,7 +108,7 @@ func (r *reconciler) reconcile(ctx context.Context, cluster db.Cluster) error {
 	if err != nil {
 		return fmt.Errorf("discovering control-plane failure domains: %w", err)
 	}
-	allocator := newControlPlaneDomainAllocator(controlPlane.nodes, failureDomains)
+	allocator := failuredomains.NewControlPlaneAllocator(controlPlane.nodes, failureDomains)
 
 	// Host creation only. A pending or in-flight delete must not stall it: the
 	// replacement host is exactly what lets the control plane shrink safely.
@@ -243,7 +244,7 @@ func (r *reconciler) reconcileControlPlaneScaleUp(
 	ctx context.Context,
 	cluster db.Cluster,
 	controlPlane *controlPlane,
-	allocator domainAllocator,
+	allocator failuredomains.Allocator,
 	newNodeProvider clients.NewNodeProvider,
 ) error {
 	deficit := cluster.ControlPlaneConfig.DesiredCount - controlPlane.size()

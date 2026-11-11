@@ -85,11 +85,11 @@ func TestReadFailureDomains(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, domains)
-		assert.Equal(t, []string{"fd-a"}, domains.eligible)
+		assert.Equal(t, []string{"fd-a"}, domains.Eligible)
 		assert.Equal(t, map[string]string{
 			"cp-status": "fd-status",
 			"cp-spec":   "fd-spec",
-		}, domains.observedByNodeName)
+		}, domains.ObservedByNodeName)
 		assert.Equal(t, 1, k8sClient.listCalls)
 	})
 
@@ -112,7 +112,7 @@ func TestReadFailureDomains(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, domains)
-		assert.Empty(t, domains.eligible)
+		assert.Empty(t, domains.Eligible)
 		assert.Zero(t, k8sClient.listCalls)
 	})
 }
@@ -172,7 +172,7 @@ func TestReadFailureDomainsWithoutAPlacementView(t *testing.T) {
 			if tc.wantErr == "" {
 				require.NoError(t, err)
 				require.NotNil(t, domains)
-				assert.Empty(t, domains.eligible)
+				assert.Empty(t, domains.Eligible)
 			} else {
 				require.ErrorContains(t, err, tc.wantErr)
 				assert.Nil(t, domains)

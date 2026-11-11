@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package controlplane
+package failuredomains
 
 import (
 	"maps"
@@ -45,7 +45,7 @@ func TestLeastUsedFailureDomainSelection(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tc.want, leastUsedFailureDomainSelection(tc.counts))
+			assert.Equal(t, tc.want, LeastUsed(tc.counts))
 		})
 	}
 }
@@ -84,11 +84,11 @@ func TestDomainAllocatorTake(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			allocator := newDomainAllocator(leastUsedFailureDomainSelection, tc.eligible)
+			allocator := NewAllocator(LeastUsed, tc.eligible)
 			for _, domain := range tc.recorded {
-				allocator.record(domain)
+				allocator.Record(domain)
 			}
-			assert.Equal(t, tc.want, allocator.take())
+			assert.Equal(t, tc.want, allocator.Take())
 		})
 	}
 }
@@ -101,10 +101,10 @@ func TestDomainAllocatorTakeCountsItsOwnHandouts(t *testing.T) {
 		seen = append(seen, maps.Clone(counts))
 		return "fd-a"
 	}
-	allocator := newDomainAllocator(stub, []string{"fd-a", "fd-b"})
+	allocator := NewAllocator(stub, []string{"fd-a", "fd-b"})
 
-	assert.Equal(t, "fd-a", allocator.take())
-	assert.Equal(t, "fd-a", allocator.take())
+	assert.Equal(t, "fd-a", allocator.Take())
+	assert.Equal(t, "fd-a", allocator.Take())
 
 	require.Len(t, seen, 2)
 	assert.Equal(t, map[string]int{"fd-a": 0, "fd-b": 0}, seen[0])
@@ -113,29 +113,29 @@ func TestDomainAllocatorTakeCountsItsOwnHandouts(t *testing.T) {
 
 func TestDomainAllocatorSpreadsSuccessiveTakes(t *testing.T) {
 	t.Parallel()
-	allocator := newDomainAllocator(leastUsedFailureDomainSelection, []string{"fd-b", "fd-a", "fd-c"})
-	got := []string{allocator.take(), allocator.take(), allocator.take(), allocator.take()}
+	allocator := NewAllocator(LeastUsed, []string{"fd-b", "fd-a", "fd-c"})
+	got := []string{allocator.Take(), allocator.Take(), allocator.Take(), allocator.Take()}
 	assert.Equal(t, []string{"fd-a", "fd-b", "fd-c", "fd-a"}, got)
 }
 
 func TestDomainAllocatorTakeWithoutEligibleDomainsIsRepeatable(t *testing.T) {
 	t.Parallel()
-	allocator := newDomainAllocator(nil, nil)
-	assert.Empty(t, allocator.take())
-	assert.Empty(t, allocator.take())
+	allocator := NewAllocator(nil, nil)
+	assert.Empty(t, allocator.Take())
+	assert.Empty(t, allocator.Take())
 }
 
 func TestZeroValueDomainAllocatorRequestsNoSpecificDomain(t *testing.T) {
 	t.Parallel()
-	var allocator domainAllocator
-	assert.Empty(t, allocator.take())
-	assert.Empty(t, allocator.take())
+	var allocator Allocator
+	assert.Empty(t, allocator.Take())
+	assert.Empty(t, allocator.Take())
 }
 
 func TestDomainAllocatorCollapsesDuplicateEligibleDomains(t *testing.T) {
 	t.Parallel()
-	allocator := newDomainAllocator(leastUsedFailureDomainSelection, []string{"fd-a", "fd-a", "fd-b"})
-	got := []string{allocator.take(), allocator.take(), allocator.take(), allocator.take()}
+	allocator := NewAllocator(LeastUsed, []string{"fd-a", "fd-a", "fd-b"})
+	got := []string{allocator.Take(), allocator.Take(), allocator.Take(), allocator.Take()}
 	assert.Equal(t, []string{"fd-a", "fd-b", "fd-a", "fd-b"}, got)
 }
 
@@ -201,12 +201,12 @@ func TestNewControlPlaneDomainAllocator(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			allocator := newControlPlaneDomainAllocator(tc.nodes, &failureDomains{
-				eligible:           tc.eligible,
-				observedByNodeName: tc.observed,
+			allocator := NewControlPlaneAllocator(tc.nodes, &Snapshot{
+				Eligible:           tc.eligible,
+				ObservedByNodeName: tc.observed,
 			})
 			assert.Equal(t, tc.counts, allocator.machinesPerDomain)
-			assert.Equal(t, tc.wantNext, allocator.take())
+			assert.Equal(t, tc.wantNext, allocator.Take())
 		})
 	}
 }
@@ -214,10 +214,33 @@ func TestNewControlPlaneDomainAllocator(t *testing.T) {
 func TestNewControlPlaneDomainAllocatorDoesNotBackfillExistingNode(t *testing.T) {
 	t.Parallel()
 	nodes := []db.Node{{Name: "cp-old"}}
-	allocator := newControlPlaneDomainAllocator(nodes, &failureDomains{
-		eligible:           []string{"fd-a", "fd-b"},
-		observedByNodeName: map[string]string{"cp-old": "fd-a"},
+	allocator := NewControlPlaneAllocator(nodes, &Snapshot{
+		Eligible:           []string{"fd-a", "fd-b"},
+		ObservedByNodeName: map[string]string{"cp-old": "fd-a"},
 	})
 	assert.Empty(t, nodes[0].FailureDomain)
-	assert.Equal(t, "fd-b", allocator.take())
+	assert.Equal(t, "fd-b", allocator.Take())
+}
+
+func TestAllocatorExclude(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		eligible []string
+		exclude  []string
+		want     string
+	}{
+		{name: "excluded domains are skipped", eligible: []string{"fd-a", "fd-b", "fd-c"}, exclude: []string{"fd-a", "fd-b"}, want: "fd-c"},
+		{name: "excluding every domain leaves placement empty", eligible: []string{"fd-a"}, exclude: []string{"fd-a"}, want: ""},
+		{name: "an unknown domain is ignored", eligible: []string{"fd-a"}, exclude: []string{"fd-z"}, want: "fd-a"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			allocator := NewAllocator(LeastUsed, tt.eligible)
+			allocator.Exclude(tt.exclude...)
+			assert.Equal(t, tt.want, allocator.Take())
+		})
+	}
 }
