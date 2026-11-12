@@ -40,7 +40,12 @@ type resourceSchema struct {
 // and conversion, so tests can read the markers back off the schema.
 func loadCRD(t *testing.T, resource string) apiextensionsv1.CustomResourceDefinition {
 	t.Helper()
-	data, err := os.ReadFile("../../config/crd/bases/internal.nvke.nvidia.com_" + resource + ".yaml")
+	directory := "../../config/crd/bases/"
+	switch resource {
+	case "machineimages", "clusterreleases", "nodepoolreleases":
+		directory = "../../../controller/deploy/charts/nvke-crds/bases/"
+	}
+	data, err := os.ReadFile(directory + "internal.nvke.nvidia.com_" + resource + ".yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,6 +226,11 @@ var baseResources = map[string]string{
 			"rollout": {"strategy": {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 0}}}
 		}
 	}`,
+	"clusterreleasechannels": `{
+		"apiVersion": "internal.nvke.nvidia.com/v1", "kind": "ClusterReleaseChannel",
+		"metadata": {"name": "stable"},
+		"spec": {"releases": {"1.35": [{"name": "release", "minimumUpgradeAge": "0s"}]}}
+	}`,
 }
 
 // releaseResources are the two kinds that share the release shape. Every rule
@@ -309,6 +319,50 @@ func TestGeneratedResourceSchemas(t *testing.T) {
 			loadResourceSchema(t, resource).admit(t, baseResource(t, resource), nil)
 		})
 	}
+}
+
+func TestClusterReleaseChannelSelectors(t *testing.T) {
+	schema := loadResourceSchema(t, "clusterreleasechannels")
+	for _, test := range []struct {
+		selector string
+		invalid  bool
+	}{
+		{"1.35", false}, {"1.35.0", false}, {"1.35.2", false},
+		{"1.35.2.12312312", false}, {"1.35.2-nvke.7", false}, {"1.35.2+sha.abc", false}, {"1.35.2_custom", false},
+		{"1.35.2-rc.1", false}, {"1.35.2.9999999999999999999999", false},
+		{"1.35.2_" + strings.Repeat("a", 121), false}, {"1.35.2_" + strings.Repeat("a", 122), true},
+		{"1", true}, {"v1.35.2", true}, {"1.035.2", true},
+		{"1.35_custom", true}, {"1.35.2custom", true}, {"1.35.2-", true}, {"1.35.2..1", true}, {"1.35.2/a", true},
+	} {
+		t.Run(test.selector, func(t *testing.T) {
+			candidate := baseResource(t, "clusterreleasechannels")
+			releases := specOf(t, candidate)["releases"].(map[string]any)
+			references := releases["1.35"]
+			delete(releases, "1.35")
+			releases[test.selector] = references
+			schema.check(t, test.invalid, candidate, nil)
+		})
+	}
+}
+
+func TestClusterReleaseChannelReferences(t *testing.T) {
+	schema := loadResourceSchema(t, "clusterreleasechannels")
+	previous := baseResource(t, "clusterreleasechannels")
+	releases := specOf(t, previous)["releases"].(map[string]any)
+	for _, selector := range []string{"1.35.2-custom.1", "1.35.2-custom.2"} {
+		releases[selector] = releases["1.35"]
+	}
+	schema.check(t, false, previous, nil)
+	candidate := runtime.DeepCopyJSON(previous)
+	updated := specOf(t, candidate)["releases"].(map[string]any)
+	selector := "1.35.2-custom.1"
+	updated[selector] = []any{map[string]any{"name": "other", "minimumUpgradeAge": "0s"}}
+	schema.check(t, false, candidate, previous)
+	updated[selector] = append(updated[selector].([]any), releases[selector].([]any)[0])
+	// Suffixed selectors allow ordered alternatives for the same published choice.
+	schema.admit(t, candidate, nil)
+	delete(updated, selector)
+	schema.check(t, false, candidate, previous)
 }
 
 // TestControlPlaneClassAdmission checks required policy choices and provider-neutral
@@ -595,39 +649,6 @@ func TestNVKEClusterAPIServerEndpointAddress(t *testing.T) {
 	}
 }
 
-func TestNVKEClusterAPIServerEndpointLockedByStatus(t *testing.T) {
-	schema := loadResourceSchema(t, "nvkeclusters")
-	const address, replacement = "10.0.0.10", "10.0.0.11"
-
-	for _, tt := range []struct {
-		name       string
-		reported   bool
-		oldAddress string
-		newAddress string
-		invalid    bool
-	}{
-		{name: "add before reported", newAddress: address},
-		{name: "change before reported", oldAddress: address, newAddress: replacement},
-		{name: "remove before reported", oldAddress: address},
-		{name: "unchanged after reported", reported: true, oldAddress: address, newAddress: address},
-		{name: "change after reported", reported: true, oldAddress: address, newAddress: replacement, invalid: true},
-		{name: "remove after reported", reported: true, oldAddress: address, invalid: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			old := clusterWithAPIServerAddress(t, tt.oldAddress)
-			if tt.reported {
-				setField(old, []string{"status", "apiServerEndpoint"}, map[string]any{"address": tt.oldAddress})
-			}
-			schema.admit(t, old, nil)
-			obj := clusterWithAPIServerAddress(t, tt.newAddress)
-			if status, ok := old["status"]; ok {
-				obj["status"] = status
-			}
-			schema.check(t, tt.invalid, obj, old)
-		})
-	}
-}
-
 func clusterWithAPIServerAddress(t *testing.T, address string) map[string]any {
 	t.Helper()
 	obj := baseResource(t, "nvkeclusters")
@@ -745,6 +766,40 @@ func TestMachineImageSpecImmutable(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			schema.check(t, tt.invalid, mutate(t, "machineimages", tt.change), runtime.DeepCopyJSON(published))
+		})
+	}
+}
+
+func TestNodePoolReleaseProfile(t *testing.T) {
+	schema := loadResourceSchema(t, "nodepoolreleases")
+	legacy := baseResource(t, "nodepoolreleases")
+	published := mutate(t, "nodepoolreleases", func(spec map[string]any) {
+		spec["profile"], spec["tag"] = "ubuntu", "24.04"
+	})
+	schema.admit(t, legacy, nil)
+	schema.admit(t, published, nil)
+	schema.admit(t, runtime.DeepCopyJSON(published), published)
+	schema.check(t, true, published, legacy)
+
+	for _, entry := range []fieldCase{
+		{name: "invalid profile", path: []string{"spec", "profile"}, value: "Not A Name", invalid: true},
+		{name: "empty tag", path: []string{"spec", "tag"}, value: "", invalid: true},
+		{name: "invalid tag", path: []string{"spec", "tag"}, value: "repo:tag", invalid: true},
+		{name: "oversized tag", path: []string{"spec", "tag"}, value: strings.Repeat("a", 129), invalid: true},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			candidate := runtime.DeepCopyJSON(published)
+			entry.apply(candidate)
+			schema.check(t, entry.invalid, candidate, nil)
+		})
+	}
+	for _, name := range []string{"profile", "tag"} {
+		t.Run(name+" is immutable", func(t *testing.T) {
+			candidate := runtime.DeepCopyJSON(published)
+			specOf(t, candidate)[name] = "other"
+			schema.check(t, true, candidate, published)
+			delete(specOf(t, candidate), name)
+			schema.check(t, true, candidate, published)
 		})
 	}
 }

@@ -10,6 +10,8 @@ VERSION ?= $(shell git describe --always --dirty --match 'management-engine/v[0-
 RELEASE_LDFLAGS ?= -s -w -buildid=
 MANAGER_LDFLAGS := -X 'main.version=$(VERSION)' $(RELEASE_LDFLAGS)
 GO_TEST_FLAGS ?=
+GINKGO_FLAGS ?=
+LINT_FLAGS ?=
 .DEFAULT_GOAL := help
 
 # Runtime target and image used by the container build/push targets.
@@ -49,6 +51,9 @@ license: ## Add the repository's license header to source files.
 manifests-state: controller-gen ## Generate internal deepcopy methods, datastore CRDs, and RBAC.
 	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
 	"$(CONTROLLER_GEN)" crd:crdVersions=v1,headerFile=hack/boilerplate.yaml.txt paths=./apis/... output:crd:artifacts:config=config/crd/bases
+	@for kind in machineimages clusterreleases nodepoolreleases; do \
+		mv "config/crd/bases/internal.nvke.nvidia.com_$$kind.yaml" ../controller/deploy/charts/nvke-crds/bases/; \
+	done
 	"$(CONTROLLER_GEN)" rbac:roleName=manager-role,headerFile=hack/boilerplate.yaml.txt paths=./controllers/... output:rbac:artifacts:config=config/rbac
 
 manifests: manifests-state kustomize kubebuilder ## Generate state, the runtime bundle, and Helm chart.
@@ -94,9 +99,9 @@ test-unit: fmt vet ## Run unit tests without a Kubernetes API server.
 
 .PHONY: test-integration
 test-integration: ENVTEST_K8S_VERSION=1.37.0
-test-integration: fmt vet setup-envtest ## Run resource integration tests with an isolated envtest API server.
+test-integration: fmt vet setup-envtest ginkgo ## Run resource and public API integration tests with an isolated envtest API server.
 	@$(COVERAGE_MKDIR)
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" $(GO) test $(GO_TEST_FLAGS) -tags=integration_test -race -coverprofile=$(call coverprofile,integration) -covermode=$(GO_COVER_MODE) ./pkg/resource
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" "$(GINKGO)" $(GINKGO_FLAGS) --tags=integration_test --race --procs=$(TEST_PROCS) --cover --covermode=$(GO_COVER_MODE) --output-dir=$(COVERAGE_DIR) --coverprofile=$(call coverprofile_name,integration) ./pkg/resource ./pkg/publicapi
 
 .PHONY: test-api
 # Separate test invocations need distinct profiles to avoid overwriting coverage.
@@ -113,15 +118,15 @@ test-controller: test-unit manifests generate fmt vet setup-envtest ginkgo ## Ru
 
 .PHONY: test-update
 test-update: export TESTUTIL_UPDATE_EXPECTED=true
-test-update: test-controller ## Run controller tests and update expected fixture goldens.
+test-update: test-controller test-integration ## Run controller and API integration tests and update expected fixture goldens.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
-	"$(GOLANGCI_LINT)" run
+	"$(GOLANGCI_LINT)" run $(LINT_FLAGS)
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	"$(GOLANGCI_LINT)" run --fix
+	"$(GOLANGCI_LINT)" run --fix $(LINT_FLAGS)
 
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
@@ -325,3 +330,8 @@ chart-check: manifests ## Lint and render the Helm chart without a cluster.
 	$(HELM) template management-engine chart --namespace management-engine-system -f config/samples/runtime-values.yaml > dist/chart-rendered.yaml
 	$(HELM) lint chart -f config/samples/runtime-values.yaml -f config/samples/nvke-controller-values.yaml
 	$(HELM) template management-engine chart --namespace management-engine-system -f config/samples/runtime-values.yaml -f config/samples/nvke-controller-values.yaml > dist/chart-nvke-controller-rendered.yaml
+
+.PHONY: test-chart-crds
+test-chart-crds: ## Verify the shared CRD chart and its controller dependency.
+	$(HELM) dependency build ../controller/deploy/charts/controller --skip-refresh
+	HELM="$(HELM)" $(GO) test $(GO_TEST_FLAGS) ./hack -run TestSharedCRDs -count=1
