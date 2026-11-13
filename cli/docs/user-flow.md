@@ -283,8 +283,8 @@ kubeconfig from step 6.
 ### 11. Patch the tenant cluster
 
 ```bash
-# Bump the Kubernetes version
-nvkectl patch cluster my-cluster --patch 'controlPlaneKubernetesVersion: 1.31.0'
+# Turn on automatic control-plane node replacement
+nvkectl patch cluster my-cluster --patch 'enableCPNodeRecycling: true'
 
 # From a patch file
 nvkectl patch cluster my-cluster --patch-file patch.yaml
