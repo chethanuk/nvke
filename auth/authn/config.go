@@ -29,12 +29,16 @@ var ErrEmptyPath = errors.New("authentication config path is empty")
 // defaulted.
 const (
 	ConfigAPIVersion = "auth.nvke.nvidia.com/v1alpha1"
-	// ConfigAPIVersionLegacy is the spelling existing sites still mount, read
-	// beside ConfigAPIVersion.
+	// ConfigAPIVersionLegacy is the spelling older authentication files still
+	// carry, read beside ConfigAPIVersion.
 	//
-	// Removed in v0.25.0. Gate: no site's nke-auth-config ConfigMap still
-	// carries this apiVersion, confirmed by a fleet kubectl get cm sweep. A
-	// site that still mounts it after removal fails startup with the
+	// Removed in v0.25.0. Gate: no file passed to management-engine's
+	// --auth-config still carries this apiVersion, confirmed by checking the
+	// file each management-engine deployment passes. That flag, through Setup
+	// and Load, is the only production path that checks apiVersion: the NVKE
+	// controller takes apiAuth from nvke-controller-config, which has no
+	// apiVersion, and refuses a set AUTH_CONFIG_PATH. A management-engine whose
+	// file still carries it after removal fails startup with the
 	// unsupported-apiVersion error below, which names what this build accepts.
 	ConfigAPIVersionLegacy = "auth.nke.nvidia.com/v1alpha1"
 	ConfigKind             = "AuthenticationConfiguration"
