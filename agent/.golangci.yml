@@ -42,6 +42,7 @@ linters:
     - makezero
     - mirror
     - misspell
+    - musttag
     - nakedret
     - nilerr
     - nolintlint
@@ -78,7 +79,6 @@ linters:
     - godot          # 45 issues - comment punctuation
     - gosec          # 18 issues - security issues
     - grouper        # 18 issues - declaration grouping
-    - musttag        # 1 issue - struct tag requirements
     - protogetter    # 124 issues - proto field access
     - staticcheck    # 16 issues - deprecated proto fields + style; QF1001/QF1003/QF1007 already clean (no findings)
     - tagliatelle    # 5 issues - would change public JSON field names
@@ -176,7 +176,6 @@ linters:
           - govet
         text: 'shadow: declaration of "(err|ctx)" shadows declaration at'
     paths:
-      - pkg/workflow/cluster
       - third_party$
       - builtin$
       - examples$
@@ -185,12 +184,12 @@ issues:
   max-same-issues: 0
   fix: false
 formatters:
-  # TODO: fix and re-enable the remaining formatters
-  # - gofmt     # 1 issue
-  # - goimports # 4 issues
+  # TODO: fix and re-enable the remaining formatter
   # - gci       # 6 issues - import grouping
   enable:
+    - gofmt
     - gofumpt
+    - goimports
   settings:
     gofumpt:
       extra-rules: true
@@ -210,7 +209,6 @@ formatters:
   exclusions:
     generated: lax
     paths:
-      - pkg/workflow/cluster
       - third_party$
       - builtin$
       - examples$

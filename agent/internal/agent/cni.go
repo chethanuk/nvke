@@ -16,9 +16,10 @@ import (
 	"time"
 
 	semver "github.com/Masterminds/semver/v3"
+	yaml "gopkg.in/yaml.v2"
+
 	pb "github.com/dsx-ai-factory/nvke/agent/pkg/agent/proto"
 	nvkeutils "github.com/dsx-ai-factory/nvke/agent/pkg/utils"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var CILIUM_VERSION semver.Version = *semver.MustParse("1.15.5")
