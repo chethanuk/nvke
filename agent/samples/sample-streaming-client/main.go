@@ -11,9 +11,10 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/dsx-ai-factory/nvke/agent/pkg/agent/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	pb "github.com/dsx-ai-factory/nvke/agent/pkg/agent/proto"
 )
 
 func main() {
