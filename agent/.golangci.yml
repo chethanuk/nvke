@@ -42,6 +42,7 @@ linters:
     - makezero
     - mirror
     - misspell
+    - musttag
     - nakedret
     - nilerr
     - nolintlint
@@ -78,7 +79,6 @@ linters:
     - godot          # 45 issues - comment punctuation
     - gosec          # 18 issues - security issues
     - grouper        # 18 issues - declaration grouping
-    - musttag        # 1 issue - struct tag requirements
     - protogetter    # 124 issues - proto field access
     - staticcheck    # 16 issues - deprecated proto fields + style; QF1001/QF1003/QF1007 already clean (no findings)
     - tagliatelle    # 5 issues - would change public JSON field names
