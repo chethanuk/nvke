@@ -23,21 +23,22 @@ import (
 )
 
 const (
-	// NVIDIABundleMediaType is the media type for NVIDIA bundle artifacts
+	// NVIDIABundleMediaType is the media type for NVIDIA bundle artifacts.
 	NVIDIABundleMediaType = "application/vnd.nvidia.bundle.v1+tgz"
 
-	// NGC OAuth token username used for authentication
+	// NGC OAuth token username used for authentication.
 	NGCOAuthUsername = "$oauthtoken"
 )
 
-// OCIConfig holds configuration for OCI registry operations
+// OCIConfig holds configuration for OCI registry operations.
 type OCIConfig struct {
 	// RegistryURL is the base OCI registry URL (e.g., "registry.example.com/nvke/bundles")
 	RegistryURL string
 }
 
-// BuildBundleReference constructs an OCI reference for a bundle
-// Format: {registry-url}/bundles-{name}:{version}
+// BuildBundleReference constructs an OCI reference for a bundle in the form
+//
+//	{registry-url}/bundles-{name}:{version}
 func BuildBundleReference(registryURL, bundleName, version string) string {
 	return fmt.Sprintf("%s/bundles-%s:%s", registryURL, bundleName, version)
 }
@@ -53,8 +54,8 @@ func BuildCollectionReference(registryURL, collectionName, version string) strin
 	return fmt.Sprintf("%s/bundles-collections-%s:%s", registryURL, collectionName, version)
 }
 
-// getCredentials returns authentication credentials from environment
-// Returns nil if no credentials are available (anonymous access)
+// getCredentials returns authentication credentials from environment.
+// Returns nil if no credentials are available (anonymous access).
 func getCredentials() *auth.Client {
 	ngcAPIKey := os.Getenv("NGC_API_KEY")
 	if ngcAPIKey == "" {
@@ -71,7 +72,7 @@ func getCredentials() *auth.Client {
 	}
 }
 
-// setupRepository creates and configures an OCI repository client
+// setupRepository creates and configures an OCI repository client.
 func setupRepository(reference string) (*remote.Repository, error) {
 	repo, err := remote.NewRepository(reference)
 	if err != nil {
@@ -86,7 +87,7 @@ func setupRepository(reference string) (*remote.Repository, error) {
 	return repo, nil
 }
 
-// findPlatformManifest finds the manifest matching the specified platform in an image index
+// findPlatformManifest finds the manifest matching the specified platform in an image index.
 func findPlatformManifest(ctx context.Context, repo *remote.Repository, indexDesc ocispec.Descriptor, arch, osVersion string) (*ocispec.Descriptor, error) {
 	// Fetch the index manifest
 	rc, err := repo.Fetch(ctx, indexDesc)
@@ -136,8 +137,8 @@ func findPlatformManifest(ctx context.Context, repo *remote.Repository, indexDes
 	return nil, fmt.Errorf("no manifest found for platform linux/%s with os.version %s", arch, osVersion)
 }
 
-// PullBundleFromOCI pulls a bundle from an OCI registry
-// It handles multi-platform manifests and selects the correct platform variant
+// PullBundleFromOCI pulls a bundle from an OCI registry.
+// It handles multi-platform manifests and selects the correct platform variant.
 func PullBundleFromOCI(ctx context.Context, registryURL, bundleName, version, arch, osVersion string) (string, error) {
 	reference := BuildBundleReference(registryURL, bundleName, version)
 	slog.Info("pulling bundle from OCI registry",
@@ -148,7 +149,7 @@ func PullBundleFromOCI(ctx context.Context, registryURL, bundleName, version, ar
 	return pullArtifact(ctx, reference, arch, osVersion)
 }
 
-// PullCollectionFromOCI pulls a collection from an OCI registry
+// PullCollectionFromOCI pulls a collection from an OCI registry.
 func PullCollectionFromOCI(ctx context.Context, registryURL, collectionName, version, arch, osVersion string) (string, error) {
 	reference := BuildCollectionReference(registryURL, collectionName, version)
 	slog.Info("pulling collection from OCI registry",
@@ -159,7 +160,7 @@ func PullCollectionFromOCI(ctx context.Context, registryURL, collectionName, ver
 	return pullArtifact(ctx, reference, arch, osVersion)
 }
 
-// pullArtifact is the core function for pulling OCI artifacts with platform selection
+// pullArtifact is the core function for pulling OCI artifacts with platform selection.
 func pullArtifact(ctx context.Context, reference, arch, osVersion string) (string, error) {
 	// Create output directory
 	outputDir, err := os.MkdirTemp("", "oci-bundle-")
@@ -221,8 +222,8 @@ func pullArtifact(ctx context.Context, reference, arch, osVersion string) (strin
 	return outputDir, nil
 }
 
-// ExtractOCIBundle extracts a pulled OCI bundle tarball to a directory
-// Returns the path to the extracted bundle
+// ExtractOCIBundle extracts a pulled OCI bundle tarball to a directory.
+// Returns the path to the extracted bundle.
 func ExtractOCIBundle(bundleDir string) (string, error) {
 	// Find the tarball in the bundle directory
 	var tarballPath string
@@ -275,7 +276,7 @@ func ExtractOCIBundle(bundleDir string) (string, error) {
 	return extractDir, nil
 }
 
-// GetOSVersionString returns the OS version string for OCI platform matching
+// GetOSVersionString returns the OS version string for OCI platform matching.
 func GetOSVersionString() (string, error) {
 	osVersion, err := GetOSVersion()
 	if err != nil {
@@ -294,8 +295,8 @@ func GetOSVersionString() (string, error) {
 	}
 }
 
-// GetArchString returns the architecture string for OCI platform matching
-// Converts Go runtime arch to OCI-compatible arch names
+// GetArchString returns the architecture string for OCI platform matching.
+// Converts Go runtime arch to OCI-compatible arch names.
 func GetArchString() string {
 	arch := GetMachineArchitecture()
 	switch arch {

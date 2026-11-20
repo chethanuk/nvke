@@ -45,7 +45,7 @@ func FetchText(ctx context.Context, url string) (string, error) {
 	return string(body), nil
 }
 
-// FetchJSON fetches JSON data from a URL and decodes it into the target interface
+// FetchJSON fetches JSON data from a URL and decodes it into the target interface.
 func FetchJSON(ctx context.Context, url string, target interface{}) error {
 	client := &http.Client{
 		Timeout: 30 * time.Second,

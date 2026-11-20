@@ -30,6 +30,7 @@ linters:
     - gochecknoinits
     - gochecksumtype
     - goconst
+    - godot
     - gomoddirectives
     - gomodguard_v2
     - goprintffuncname
@@ -75,7 +76,6 @@ linters:
     - dupl           # 3 issues - 6 near-identical funcs in internal/k8s/cmds.go; wants a real refactor, not a near-free fix
     - errorlint      # 34 issues - error wrapping
     - gocritic       # 73 issues - various code style
-    - godot          # 45 issues - comment punctuation
     - gosec          # 18 issues - security issues
     - grouper        # 18 issues - declaration grouping
     - musttag        # 1 issue - struct tag requirements
