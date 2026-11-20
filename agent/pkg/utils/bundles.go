@@ -32,7 +32,7 @@ const (
 	httpRetryInitialDelay = 2 * time.Second
 )
 
-// BundleSourceType represents the type of bundle source
+// BundleSourceType represents the type of bundle source.
 type BundleSourceType int
 
 const (
@@ -41,7 +41,7 @@ const (
 	BundleSourceFile                         // Local file system bundle source
 )
 
-// BundleSource represents a parsed bundle source configuration
+// BundleSource represents a parsed bundle source configuration.
 type BundleSource struct {
 	Type        BundleSourceType
 	URL         string // The URL (for HTTP/File sources) or registry URL (for OCI)
@@ -94,22 +94,22 @@ func ParseBundleSourceURI(uri string) (*BundleSource, error) {
 	return source, nil
 }
 
-// IsOCI returns true if the bundle source is an OCI registry
+// IsOCI returns true if the bundle source is an OCI registry.
 func (bs *BundleSource) IsOCI() bool {
 	return bs.Type == BundleSourceOCI
 }
 
-// IsHTTP returns true if the bundle source is HTTP/HTTPS
+// IsHTTP returns true if the bundle source is HTTP/HTTPS.
 func (bs *BundleSource) IsHTTP() bool {
 	return bs.Type == BundleSourceHTTP
 }
 
-// IsFile returns true if the bundle source is a local file system
+// IsFile returns true if the bundle source is a local file system.
 func (bs *BundleSource) IsFile() bool {
 	return bs.Type == BundleSourceFile
 }
 
-// String returns a human-readable representation of the bundle source type
+// String returns a human-readable representation of the bundle source type.
 func (t BundleSourceType) String() string {
 	switch t {
 	case BundleSourceHTTP:
@@ -172,7 +172,7 @@ type Bundle struct {
 	OCIReference   string // OCI registry reference (e.g., registry.example.com/nvke/bundles/bundles-kubeadm:v1.30.0)
 }
 
-// Entry represents a single component entry
+// Entry represents a single component entry.
 type Entry struct {
 	Arch    string          `json:"arch"`
 	Path    string          `json:"path"`
@@ -188,17 +188,17 @@ func VersionString(v *semver.Version) string {
 	return v.String()
 }
 
-// Component represents a component with multiple entries
+// Component represents a component with multiple entries.
 type Component struct {
 	Entries []Entry `json:"entries"`
 }
 
-// Index is the whole JSON structure, where the keys are component names
+// Index is the whole JSON structure, where the keys are component names.
 type Index map[string]Component
 
 // Find will iterate over the index.json file and try to find the specfied bundle; name, version, arch
 // currently relying on the bundles being in the same base URL as the index file
-// returns the relative path to the bundle, caller is responsible for setting full path
+// returns the relative path to the bundle, caller is responsible for setting full path.
 func (idx Index) Find(name string, version *semver.Version, architecture string) (*Bundle, bool) {
 	bundle := &Bundle{
 		Name:    name,
@@ -243,7 +243,7 @@ func GetMachineArchitecture() string {
 	}
 }
 
-// OSVersion represents supported Ubuntu versions
+// OSVersion represents supported Ubuntu versions.
 type OSVersion int
 
 const (
@@ -254,7 +254,7 @@ const (
 
 var readFile = os.ReadFile
 
-// GetOSVersion attempts to detect the Ubuntu version from /etc/os-release
+// GetOSVersion attempts to detect the Ubuntu version from /etc/os-release.
 func GetOSVersion() (OSVersion, error) {
 	data, err := readFile("/etc/os-release")
 	if err != nil {
@@ -509,7 +509,7 @@ func DownloadAndExtractArchive(b *Bundle, source *BundleSource) (string, error) 
 	return downloadAndExtractFromHTTP(b)
 }
 
-// downloadAndExtractFromHTTP downloads the bundle from HTTP/S3 and extracts it
+// downloadAndExtractFromHTTP downloads the bundle from HTTP/S3 and extracts it.
 func downloadAndExtractFromHTTP(b *Bundle) (string, error) {
 	outputDir, err := os.MkdirTemp("", fmt.Sprintf("%s_%s-", b.Name, b.Version))
 	if err != nil {
@@ -587,8 +587,8 @@ func downloadAndExtractFromOCI(ctx context.Context, b *Bundle, ociRegistryURL, a
 	return extractedDir, nil
 }
 
-// FetchBundleFromOCIRegistry fetches a bundle directly from the OCI registry
-// This is an alternative to FetchBundleFromIndex when using OCI registries
+// FetchBundleFromOCIRegistry fetches a bundle directly from the OCI registry.
+// This is an alternative to FetchBundleFromIndex when using OCI registries.
 func FetchBundleFromOCIRegistry(ctx context.Context, ociRegistryURL, name string, version *semver.Version, arch, osVersion string) (*Bundle, error) {
 	bundle := &Bundle{
 		Name:         name,

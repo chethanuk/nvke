@@ -87,7 +87,7 @@ func registerControllerClientCABundleFlag(fs *flag.FlagSet) *string {
 // AgentConfig centralizes configuration previously stored in globals.
 // It is passed explicitly to functions instead of relying on package-level state.
 // TODO:  May want to move this and define it in the agent package, and just
-// pass the full config to NewAgent but for now beyond the scope of this commit :)
+// pass the full config to NewAgent but for now beyond the scope of this commit.
 type AgentConfig struct {
 	Version                  string
 	NodeServerListenPort     string

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Sample kubeconfig YAML for testing
+// Sample kubeconfig YAML for testing.
 const validKubeconfig = `apiVersion: v1
 clusters:
 - cluster:
@@ -465,7 +465,7 @@ func TestCalicoKubectlEnv(t *testing.T) {
 	})
 }
 
-// TestInstallCNIPluginSelection tests the installCNIPlugin method's plugin selection logic
+// TestInstallCNIPluginSelection tests the installCNIPlugin method's plugin selection logic.
 func TestInstallCNIPluginSelection(t *testing.T) {
 	// This test verifies the switch case logic in agent.go's installCNIPlugin
 	// by checking that plugin names are correctly identified
@@ -550,7 +550,7 @@ func TestHelmPodNetworkValue(t *testing.T) {
 	}
 }
 
-// TestOVNHelmArgsConstruction tests the helm args construction for OVN installation
+// TestOVNHelmArgsConstruction tests the helm args construction for OVN installation.
 func TestOVNHelmArgsConstruction(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -769,7 +769,7 @@ func TestKubeadmPodNetworkCIDR(t *testing.T) {
 	}
 }
 
-// TestBundleStatusInitialization tests that bundle status is properly initialized
+// TestBundleStatusInitialization tests that bundle status is properly initialized.
 func TestBundleStatusInitialization(t *testing.T) {
 	tests := []struct {
 		name           string

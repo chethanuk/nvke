@@ -83,12 +83,12 @@ func aptget(ctx context.Context, args ...string) error {
 	return nil
 }
 
-// Update calls apt-get update
+// Update calls apt-get update.
 func Update(ctx context.Context) error {
 	return aptget(ctx, "update")
 }
 
-// Install calls apt-get install <package> or <package=version>
+// Install calls apt-get install <package> or <package=version>.
 func Install(ctx context.Context, name ...string) error {
 	if len(name) == 0 {
 		return errors.New("no packages to install")

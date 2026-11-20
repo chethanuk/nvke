@@ -467,7 +467,7 @@ func TestConcurrentStatusUpdates(t *testing.T) {
 	assert.Equal(t, numGoroutines, len(server.NodeStatus.Bundles))
 }
 
-// ErrorMockPersister is a mock persister that returns an error
+// ErrorMockPersister is a mock persister that returns an error.
 type ErrorMockPersister struct {
 	mu      sync.Mutex
 	Called  bool

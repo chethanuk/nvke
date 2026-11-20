@@ -52,7 +52,7 @@ var (
 	mlx5RescanScript string
 )
 
-// Enums for example purposes
+// Enums for example purposes.
 const (
 	JoinPhase             = "join"
 	InitPhase             = "initialize"
@@ -73,7 +73,7 @@ const (
 	StateFile             = NVKEDir + "/state.json"
 	NVKEAuditLog          = "/var/log/nvke-agent-audit.log"
 	NVKEExecuteScriptsLog = "/var/log/nvke-execute-scripts.log"
-	// TODO: May need to adjust the following settings, but for now let's start here and expand as needed
+	// TODO: May need to adjust the following settings, but for now let's start here and expand as needed.
 	ScriptStatusLimit       = 3
 	maxScriptLogOutputBytes = 4096
 	kubeletConfigPath       = "/var/lib/kubelet/config.yaml"
@@ -563,7 +563,8 @@ func pinnedKubernetesVersionForCLIInit(req *pb.KubeadmInitRequest) string {
 	return canonicalKubernetesVersion(kVer)
 }
 
-// Server logic
+// Server logic.
+
 func (s *NodeAgentServer) ExecuteKubeadmJoin(
 	ctx context.Context,
 	req *pb.KubeadmJoinRequest,
@@ -1444,7 +1445,9 @@ func parsePreflightOutput(output string) []*pb.PreflightCheckResult {
 }
 
 // parsePreflightLine extracts the check name and message from a preflight output line.
-// Example: "[WARNING Firewalld]: firewalld is active" -> ("Firewalld", "firewalld is active")
+// For example:
+//
+//	"[WARNING Firewalld]: firewalld is active" -> ("Firewalld", "firewalld is active")
 func parsePreflightLine(line, prefix string) (string, string) {
 	// Remove the prefix (e.g. "[WARNING " or "[ERROR ")
 	after := strings.TrimPrefix(line, prefix)
@@ -1458,7 +1461,7 @@ func parsePreflightLine(line, prefix string) (string, string) {
 	return name, msg
 }
 
-// Clean up and CNI files
+// Clean up and CNI files.
 func cleanupCNIFiles() error {
 	_, err := os.Stat("/var/lib/openvswitch")
 	if os.IsNotExist(err) {
@@ -1546,7 +1549,7 @@ func (s *NodeAgentServer) GetKubeconfig(
 	return response, nil
 }
 
-// UpdateAndFetchKubeAdmJoinStrings updates certs and tokens and creates a new join string for both controlplane and worker
+// UpdateAndFetchKubeAdmJoinStrings updates certs and tokens and creates a new join string for both controlplane and worker.
 func (s *NodeAgentServer) UpdateAndFetchKubeAdmJoinStrings(
 	ctx context.Context,
 	req *pb.KubeadmJoinStringRequest,
