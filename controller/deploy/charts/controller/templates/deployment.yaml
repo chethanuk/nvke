@@ -37,6 +37,9 @@
 {{- include "controller.apiAuth.validate" . }}
 {{- include "controller.apiAuthz.validate" . }}
 {{- include "controller.controllerConfig.validateEnv" . }}
+{{- if and .Values.apiTLS.clientCASecretName (not .Values.apiTLS.secretName) }}
+{{- fail "apiTLS.clientCASecretName requires apiTLS.secretName: the client CA only applies when the API serves TLS" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -54,6 +57,10 @@ metadata:
   {{- end }}
   {{- if and .Values.nodeAgent.externalMTLS.enabled (not (hasKey (default dict .Values.deploymentAnnotations) "secret.reloader.stakater.com/reload")) }}
   {{- $reloadSecrets = append $reloadSecrets (required "nodeAgent.externalMTLS.secret.name is required when external mTLS is enabled" .Values.nodeAgent.externalMTLS.secret.name) }}
+  {{- end }}
+  {{- if not (hasKey (default dict .Values.deploymentAnnotations) "secret.reloader.stakater.com/reload") }}
+  {{- with .Values.apiTLS.secretName }}{{ $reloadSecrets = append $reloadSecrets . }}{{ end }}
+  {{- with .Values.apiTLS.clientCASecretName }}{{ $reloadSecrets = append $reloadSecrets . }}{{ end }}
   {{- end }}
   {{- if not (hasKey (default dict .Values.deploymentAnnotations) "configmap.reloader.stakater.com/reload") }}
   {{- $reloadConfigMaps = append $reloadConfigMaps (include "controller.controllerConfig.name" .) }}
@@ -188,11 +195,11 @@ spec:
               protocol: TCP
           {{- with .Values.livenessProbe }}
           livenessProbe:
-            {{- toYaml . | nindent 12 }}
+            {{- include "controller.probe" (dict "probe" . "root" $) | nindent 12 }}
           {{- end }}
           {{- with .Values.readinessProbe }}
           readinessProbe:
-            {{- toYaml . | nindent 12 }}
+            {{- include "controller.probe" (dict "probe" . "root" $) | nindent 12 }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -203,6 +210,16 @@ spec:
             {{- if .Values.nodeAgent.externalMTLS.enabled }}
             - name: node-agent-client-tls
               mountPath: /etc/nvke/node-agent-client-tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.apiTLS.secretName }}
+            - name: api-tls
+              mountPath: /etc/nvke/api-tls
+              readOnly: true
+            {{- end }}
+            {{- if .Values.apiTLS.clientCASecretName }}
+            - name: api-client-ca
+              mountPath: /etc/nvke/api-client-ca
               readOnly: true
             {{- end }}
             {{- if .Values.apiAuthz.enabled }}
@@ -300,6 +317,16 @@ spec:
             {{- end }}
             - name: CONTROLLER_CONFIG_PATH
               value: {{ printf "%s/%s" (include "controller.controllerConfig.mountPath" .) (include "controller.controllerConfig.file" .) | quote }}
+            {{- if .Values.apiTLS.secretName }}
+            - name: SERVER_TLS_CERT_FILE
+              value: /etc/nvke/api-tls/tls.crt
+            - name: SERVER_TLS_KEY_FILE
+              value: /etc/nvke/api-tls/tls.key
+            {{- end }}
+            {{- if .Values.apiTLS.clientCASecretName }}
+            - name: SERVER_TLS_CLIENT_CA_FILE
+              value: /etc/nvke/api-client-ca/ca.crt
+            {{- end }}
             {{- range .Values.env }}
             - name: {{ .name }}
               value: {{ .value | quote }}
@@ -327,6 +354,16 @@ spec:
               - key: {{ required "nodeAgent.externalMTLS.secret.newPrivateKeyKey is required when the new-form identity is configured" .Values.nodeAgent.externalMTLS.secret.newPrivateKeyKey }}
                 path: nvke-tls.key
               {{- end }}
+        {{- end }}
+        {{- if .Values.apiTLS.secretName }}
+        - name: api-tls
+          secret:
+            secretName: {{ .Values.apiTLS.secretName }}
+        {{- end }}
+        {{- if .Values.apiTLS.clientCASecretName }}
+        - name: api-client-ca
+          secret:
+            secretName: {{ .Values.apiTLS.clientCASecretName }}
         {{- end }}
         {{- if .Values.profiles.image.enabled }}
         - name: profiles

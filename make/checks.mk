@@ -136,6 +136,7 @@ lint-chart: ## Lint and render the Helm chart, then validate it. (run by the mer
 	@./controller/hack/chart-auth-assertions.sh
 	@./controller/hack/chart-node-agent-auth-assertions.sh
 	@./controller/hack/chart-node-agent-external-mtls-assertions.sh
+	@./controller/hack/chart-api-tls-assertions.sh
 	@./controller/hack/chart-provider-assertions.sh
 	@./controller/hack/chart-spire-attestation-assertions.sh
 

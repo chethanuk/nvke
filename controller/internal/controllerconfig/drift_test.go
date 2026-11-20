@@ -65,6 +65,10 @@ var stayEnv = map[string]string{
 	// spiffe.spire.serverAddress is the override.
 	"SPIRE_SERVER_ADDRESS":   downwardAPI,
 	"CONTROLLER_CONFIG_PATH": separateFile,
+	// apiTLS: the chart mounts each Secret and points these at its files.
+	"SERVER_TLS_CERT_FILE":      separateFile,
+	"SERVER_TLS_KEY_FILE":       separateFile,
+	"SERVER_TLS_CLIENT_CA_FILE": separateFile,
 
 	"LOG_LEVEL":                                chartUnset,
 	"DB_QUERY_LOG_LEVEL":                       chartUnset,

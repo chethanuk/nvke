@@ -516,6 +516,17 @@ oidc:
   #       -----END CERTIFICATE-----
   providers: []
 
+# TLS for the NVKE API on port 8080. Unset, the API serves plain HTTP.
+apiTLS:
+  # -- kubernetes.io/tls Secret (tls.crt, tls.key) for the API server
+  # certificate. Set to serve HTTPS; httpGet probes then use scheme HTTPS.
+  secretName: ""
+  # -- Secret holding ca.crt. When set, the API accepts only callers whose
+  # certificate this CA signed and rejects the rest during the TLS handshake.
+  # Requires secretName. The kubelet has no client certificate, so httpGet
+  # probes are rendered as tcpSocket probes on the same port.
+  clientCASecretName: ""
+
 # NVKE API authentication. The chart renders it into the apiAuth section of
 # nvke-controller-config. See the README for the schema.
 apiAuth:

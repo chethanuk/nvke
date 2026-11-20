@@ -4,11 +4,14 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	pathpkg "path"
 	"time"
 
@@ -216,8 +219,37 @@ func NewServer(
 		Handler:           handler,
 		ReadHeaderTimeout: ReadHeaderTimeout,
 	}
+	if cfg.ServerTLSCertFile != "" {
+		if srv.TLSConfig, err = apiTLSConfig(cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	return srv, nil
+}
+
+// apiTLSConfig returns the API's TLS settings. The worker serves TLS whenever
+// the server NewServer returns has a TLSConfig.
+func apiTLSConfig(cfg config.Config) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(cfg.ServerTLSCertFile, cfg.ServerTLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load SERVER_TLS_CERT_FILE and SERVER_TLS_KEY_FILE: %w", err)
+	}
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cert}}
+	if cfg.ServerTLSClientCAFile == "" {
+		return tlsCfg, nil
+	}
+	pemBytes, err := os.ReadFile(cfg.ServerTLSClientCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read SERVER_TLS_CLIENT_CA_FILE: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, fmt.Errorf("SERVER_TLS_CLIENT_CA_FILE %q has no PEM certificates", cfg.ServerTLSClientCAFile)
+	}
+	tlsCfg.ClientCAs = pool
+	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+	return tlsCfg, nil
 }
 
 // stdServerErrorStatus maps oapi-codegen-generated request-parsing errors to
