@@ -185,10 +185,10 @@ issues:
   fix: false
 formatters:
   # TODO: fix and re-enable the remaining formatters
-  # - gofmt     # 1 issue
   # - goimports # 4 issues
   # - gci       # 6 issues - import grouping
   enable:
+    - gofmt
     - gofumpt
   settings:
     gofumpt:
