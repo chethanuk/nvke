@@ -520,6 +520,8 @@ oidc:
 apiTLS:
   # -- kubernetes.io/tls Secret (tls.crt, tls.key) for the API server
   # certificate. Set to serve HTTPS; httpGet probes then use scheme HTTPS.
+  # The controller reads both Secrets at startup; the Reloader annotation
+  # restarts it when they change.
   secretName: ""
   # -- Secret holding ca.crt. When set, the API accepts only callers whose
   # certificate this CA signed and rejects the rest during the TLS handshake.

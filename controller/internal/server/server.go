@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	pathpkg "path"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -219,13 +221,28 @@ func NewServer(
 		Handler:           handler,
 		ReadHeaderTimeout: ReadHeaderTimeout,
 	}
-	if cfg.ServerTLSCertFile != "" {
+	// Any TLS setting builds TLS, so a partial set fails here rather than serving plain HTTP.
+	if cfg.ServerTLSCertFile != "" || cfg.ServerTLSKeyFile != "" || cfg.ServerTLSClientCAFile != "" {
 		if srv.TLSConfig, err = apiTLSConfig(cfg); err != nil {
 			return nil, err
 		}
+		srv.ErrorLog = log.New(serverErrorLog{logger}, "", 0)
 	}
 
 	return srv, nil
+}
+
+// serverErrorLog sends http.Server's error log to slog. It drops the handshake
+// EOF a tcpSocket probe causes on every connect, which would otherwise bury
+// real handshake failures.
+type serverErrorLog struct{ logger *slog.Logger }
+
+func (w serverErrorLog) Write(p []byte) (int, error) {
+	msg := strings.TrimSpace(string(p))
+	if !strings.HasPrefix(msg, "http: TLS handshake error") || !strings.HasSuffix(msg, ": EOF") {
+		w.logger.Warn(msg)
+	}
+	return len(p), nil
 }
 
 // apiTLSConfig returns the API's TLS settings. The worker serves TLS whenever

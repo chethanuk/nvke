@@ -4,6 +4,7 @@
 package server_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -18,6 +19,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -112,6 +115,13 @@ func newTestPKI(t *testing.T) testPKI {
 // way the worker does: TLS when NewServer configured it, plain HTTP otherwise.
 func startWorkerServer(t *testing.T, env map[string]string) (*http.Server, string) {
 	t.Helper()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	return startWorkerServerWithLogger(t, env, logger)
+}
+
+// startWorkerServerWithLogger is startWorkerServer with the logger passed to server.NewServer.
+func startWorkerServerWithLogger(t *testing.T, env map[string]string, logger *slog.Logger) (*http.Server, string) {
+	t.Helper()
 	t.Setenv("CONTROLLER_CONFIG_PATH", "unused.yaml")
 	for k, v := range env {
 		t.Setenv(k, v)
@@ -120,7 +130,6 @@ func startWorkerServer(t *testing.T, env map[string]string) (*http.Server, strin
 	require.NoError(t, err)
 	cfg.ProfilesDir = "./profiles"
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	srv, err := server.NewServer(cfg, logger, &testutil.MockDB{}, nil, nil, nil)
 	require.NoError(t, err)
 
@@ -149,7 +158,9 @@ func httpsClient(t *testing.T, roots *x509.CertPool, certFile, keyFile string) *
 	if certFile != "" {
 		pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 		require.NoError(t, err)
-		tlsCfg.Certificates = []tls.Certificate{pair}
+		// Go's client withholds a certificate the server's acceptable-CA list does not name;
+		// send it anyway so a cert from another CA reaches the server instead of no cert.
+		tlsCfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &pair, nil }
 	}
 	return &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: tlsCfg}}
 }
@@ -212,6 +223,86 @@ func TestAPIServesHealthzOverConfiguredTransport(t *testing.T) {
 	}
 }
 
+// lockedBuffer is a bytes.Buffer safe for the server's logging goroutines and the test to share.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestAPIServerErrorLogSkipsProbeEOF(t *testing.T) {
+	pki := newTestPKI(t)
+	mtlsEnv := map[string]string{
+		"SERVER_TLS_CERT_FILE":      pki.serverCert,
+		"SERVER_TLS_KEY_FILE":       pki.serverKey,
+		"SERVER_TLS_CLIENT_CA_FILE": pki.ca.pemPath,
+	}
+
+	tests := []struct {
+		name    string
+		connect func(t *testing.T, addr string)
+		wantLog bool
+	}{
+		{
+			name: "tcp probe connect and close",
+			connect: func(t *testing.T, addr string) {
+				t.Helper()
+				conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", addr)
+				require.NoError(t, err)
+				require.NoError(t, conn.Close())
+			},
+		},
+		{
+			name: "client cert from another CA",
+			connect: func(t *testing.T, addr string) {
+				t.Helper()
+				client := httpsClient(t, pki.ca.pool, pki.strangerCert, pki.strangerKey)
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+addr+"/healthz", http.NoBody)
+				require.NoError(t, err)
+				if resp, err := client.Do(req); err == nil {
+					resp.Body.Close()
+				}
+			},
+			wantLog: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf lockedBuffer
+			logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			_, addr := startWorkerServerWithLogger(t, mtlsEnv, logger)
+
+			tt.connect(t, addr)
+
+			if tt.wantLog {
+				require.Eventually(t, func() bool {
+					for line := range strings.Lines(buf.String()) {
+						if strings.Contains(line, "TLS handshake error") && strings.Contains(line, "level=WARN") {
+							return true
+						}
+					}
+					return false
+				}, 5*time.Second, 10*time.Millisecond, "want a WARN slog record for the handshake error, got:\n%s", buf.String())
+				return
+			}
+			// The server logs asynchronously; give a stray EOF line time to land before asserting absence.
+			time.Sleep(200 * time.Millisecond)
+			assert.NotContains(t, buf.String(), "TLS handshake error")
+		})
+	}
+}
+
 func TestNewServerRejectsUnusableTLSFiles(t *testing.T) {
 	pki := newTestPKI(t)
 	dir := t.TempDir()
@@ -243,6 +334,8 @@ func TestNewServerRejectsUnusableTLSFiles(t *testing.T) {
 			name: "client CA file that is not PEM",
 			cfg:  config.Config{ServerTLSCertFile: pki.serverCert, ServerTLSKeyFile: pki.serverKey, ServerTLSClientCAFile: garbage},
 		},
+		{name: "key file without cert file", cfg: config.Config{ServerTLSKeyFile: pki.serverKey}},
+		{name: "client CA file without cert file", cfg: config.Config{ServerTLSKeyFile: pki.serverKey, ServerTLSClientCAFile: pki.ca.pemPath}},
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	for _, tt := range tests {

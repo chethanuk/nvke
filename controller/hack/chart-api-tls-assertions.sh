@@ -96,6 +96,19 @@ count "both probes are tcpSocket" 'tcpSocket:' 2 "${mtls}"
 absent "no httpGet probe the kubelet cannot pass" 'httpGet:' "${mtls}"
 want "Reloader watches both Secrets" 'secret.reloader.stakater.com/reload: "nvke-api-tls,nvke-api-client-ca"' "${mtls}"
 
+echo "apiTLS with probes that are not httpGet"
+other="$(helm template cwe "${CHART}" --set apiTLS.secretName=nvke-api-tls \
+  --set livenessProbe.tcpSocket.port=http --set 'readinessProbe.exec.command[0]=true')"
+absent "no HTTPS scheme on a probe that has no httpGet" 'scheme: HTTPS' "${other}"
+count "tcpSocket probe kept" 'tcpSocket:' 1 "${other}"
+want "exec probe kept" '^ +exec:' "${other}"
+
+echo "apiTLS with a user-set Reloader annotation"
+own="$(render --set apiTLS.secretName=nvke-api-tls \
+  --set-string 'deploymentAnnotations.secret\.reloader\.stakater\.com/reload=mine')"
+want "the user's annotation wins" 'secret.reloader.stakater.com/reload: "?mine"?$' "${own}"
+absent "apiTLS Secret not appended to it" 'secret.reloader.stakater.com/reload: .*nvke-api-tls' "${own}"
+
 echo "refused values"
 wantfail "client CA without a server certificate" 'apiTLS.clientCASecretName requires apiTLS.secretName' \
   --set apiTLS.clientCASecretName=nvke-api-client-ca
