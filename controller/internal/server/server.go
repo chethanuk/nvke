@@ -4,12 +4,17 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	pathpkg "path"
+	"strings"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -216,8 +221,52 @@ func NewServer(
 		Handler:           handler,
 		ReadHeaderTimeout: ReadHeaderTimeout,
 	}
+	// Any TLS setting builds TLS, so a partial set fails here rather than serving plain HTTP.
+	if cfg.ServerTLSCertFile != "" || cfg.ServerTLSKeyFile != "" || cfg.ServerTLSClientCAFile != "" {
+		if srv.TLSConfig, err = apiTLSConfig(cfg); err != nil {
+			return nil, err
+		}
+		srv.ErrorLog = log.New(serverErrorLog{logger}, "", 0)
+	}
 
 	return srv, nil
+}
+
+// serverErrorLog sends http.Server's error log to slog. It drops the handshake
+// EOF a tcpSocket probe causes on every connect, which would otherwise bury
+// real handshake failures.
+type serverErrorLog struct{ logger *slog.Logger }
+
+func (w serverErrorLog) Write(p []byte) (int, error) {
+	msg := strings.TrimSpace(string(p))
+	if !strings.HasPrefix(msg, "http: TLS handshake error") || !strings.HasSuffix(msg, ": EOF") {
+		w.logger.Warn(msg)
+	}
+	return len(p), nil
+}
+
+// apiTLSConfig returns the API's TLS settings. The worker serves TLS whenever
+// the server NewServer returns has a TLSConfig.
+func apiTLSConfig(cfg config.Config) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(cfg.ServerTLSCertFile, cfg.ServerTLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load SERVER_TLS_CERT_FILE and SERVER_TLS_KEY_FILE: %w", err)
+	}
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cert}}
+	if cfg.ServerTLSClientCAFile == "" {
+		return tlsCfg, nil
+	}
+	pemBytes, err := os.ReadFile(cfg.ServerTLSClientCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read SERVER_TLS_CLIENT_CA_FILE: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, fmt.Errorf("SERVER_TLS_CLIENT_CA_FILE %q has no PEM certificates", cfg.ServerTLSClientCAFile)
+	}
+	tlsCfg.ClientCAs = pool
+	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+	return tlsCfg, nil
 }
 
 // stdServerErrorStatus maps oapi-codegen-generated request-parsing errors to

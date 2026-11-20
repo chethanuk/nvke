@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -713,8 +714,13 @@ func main() {
 
 	// Start the HTTP server in a goroutine
 	g.Go(func() error {
-		logger.Info("Starting HTTP server")
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Info("Starting HTTP server", "tls", httpServer.TLSConfig != nil, "clientCA", cfg.ServerTLSClientCAFile != "")
+		serve := httpServer.ListenAndServe
+		if httpServer.TLSConfig != nil {
+			// NewServer loaded the certificate into TLSConfig.
+			serve = func() error { return httpServer.ListenAndServeTLS("", "") }
+		}
+		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server encountered an error", "error", err)
 			return err
 		}

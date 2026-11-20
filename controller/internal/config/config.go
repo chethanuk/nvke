@@ -148,6 +148,15 @@ type Config struct {
 	// ServerListenAddress is the address and port to bind for the HTTP server
 	ServerListenAddress string `env:"SERVER_LISTEN_ADDRESS" default:":8080"`
 
+	// ServerTLSCertFile and ServerTLSKeyFile turn on HTTPS for the API server
+	// when both are set. Unset, the API serves plain HTTP.
+	ServerTLSCertFile string `env:"SERVER_TLS_CERT_FILE"`
+	ServerTLSKeyFile  string `env:"SERVER_TLS_KEY_FILE"`
+
+	// ServerTLSClientCAFile, when set, makes the API server require a client
+	// certificate signed by this CA. It needs ServerTLSCertFile and ServerTLSKeyFile.
+	ServerTLSClientCAFile string `env:"SERVER_TLS_CLIENT_CA_FILE"`
+
 	// MetricsListenAddress is the address and port for the Prometheus metrics
 	// server. Defaults to 127.0.0.1:9090 (localhost-only) so the endpoint is
 	// not reachable from outside the pod without an explicit override.
@@ -648,6 +657,12 @@ func (c *Config) Validate() error {
 	}
 	if c.SpireServerAPIAddress == "" {
 		return fmt.Errorf("SPIRE_SERVER_API_ADDRESS is required")
+	}
+	if (c.ServerTLSCertFile == "") != (c.ServerTLSKeyFile == "") {
+		return fmt.Errorf("SERVER_TLS_CERT_FILE and SERVER_TLS_KEY_FILE must be set together")
+	}
+	if c.ServerTLSClientCAFile != "" && c.ServerTLSCertFile == "" {
+		return fmt.Errorf("SERVER_TLS_CLIENT_CA_FILE requires SERVER_TLS_CERT_FILE and SERVER_TLS_KEY_FILE")
 	}
 	return nil
 }

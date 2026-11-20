@@ -382,3 +382,21 @@ controller.apiAuth.validate. Emits nothing.
 {{- end -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+A liveness or readiness probe adjusted for apiTLS: an httpGet probe uses
+scheme HTTPS, or becomes a tcpSocket probe when a client CA is required,
+because the kubelet cannot present a client certificate.
+*/}}
+{{- define "controller.probe" -}}
+{{- $p := deepCopy .probe -}}
+{{- if and .root.Values.apiTLS.secretName (kindIs "map" $p.httpGet) -}}
+{{- if .root.Values.apiTLS.clientCASecretName -}}
+{{- $_ := set $p "tcpSocket" (dict "port" $p.httpGet.port) -}}
+{{- $_ := unset $p "httpGet" -}}
+{{- else -}}
+{{- $_ := set $p.httpGet "scheme" "HTTPS" -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $p -}}
+{{- end -}}
